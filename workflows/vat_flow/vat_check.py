@@ -201,27 +201,19 @@ def read_journal_rows(sheet):
     """读取所有分录区，按从左到右、左侧表格在上的顺序拼接。"""
     regions = journal_regions(sheet)
     rows = []
-    skipped = 0
     for header_row, columns, last_row in regions:
         if last_row is None:
             continue
         for row in range(header_row + 1, last_row + 1):
-            values = (
+            # 以最后账号行为界；中间空白账号行、四列全空行均保留，按空值正常录入。
+            rows.append((
                 sheet.cell(row, columns["账号"]).value,
                 sheet.cell(row, columns["借项金额"]).value,
                 sheet.cell(row, columns["贷项金额"]).value,
                 sheet.cell(row, columns["备注"]).value,
-            )
-            # 以最后账号行为界；中间空白账号行保留，仅过滤四列全空的占位行。
-            if all(value is None or (isinstance(value, str) and not value.strip())
-                   for value in values):
-                skipped += 1
-                continue
-            rows.append(values)
+            ))
     if not rows:
         raise ConfigError(f"{sheet.title} 分录区没有可录入的数据")
-    if skipped:
-        logger.info(f"分录区跳过 {skipped} 行四列全空的占位行")
     description = next(
         (text(row[3]) for row in rows if text(row[3])), ""
     )
