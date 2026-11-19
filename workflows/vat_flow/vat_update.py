@@ -72,7 +72,9 @@ def read_ledger(path, sheet_name=None, header_row=1):
     path = Path(path)
     if not path.is_file():
         raise ConfigError(f"明细账文件不存在：{path}")
-    book = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    # JDE 导出的 xlsx 可能缺少完整的 dimension 元数据；read_only 模式会
+    # 按错误范围只读到第一列，因此这里使用普通模式读取。
+    book = openpyxl.load_workbook(path, data_only=True)
     try:
         if sheet_name and sheet_name in book.sheetnames:
             sheet = book[sheet_name]
@@ -345,6 +347,11 @@ def build_workbook(template, destination, ledger_path, report_path, period_first
             book = _open_book(app, template, False)
             book.SaveAs(str(destination), 51)
             logger.info(f"模板已转换为工作簿格式：{destination}")
+            if not destination.is_file():
+                raise ConfigError(
+                    f"模板转换后未生成文件：{destination}；"
+                    f"Excel 实际路径：{book.FullName}"
+                )
         if book.ReadOnly:
             raise ConfigError("输出文件被占用，无法写入")
 
@@ -365,6 +372,19 @@ def build_workbook(template, destination, ledger_path, report_path, period_first
         _set_tax_period_text(main, period_first, month_end)
 
         book.Save()
+        actual = Path(str(book.FullName))
+        if actual.resolve() != destination.resolve():
+            logger.warning(
+                f"Excel 实际保存路径与目标不一致：{actual}，"
+                f"重新另存为：{destination}"
+            )
+            book.SaveAs(str(destination), 51)
+            book.Save()
+            actual = Path(str(book.FullName))
+        if not destination.is_file() or destination.stat().st_size == 0:
+            raise ConfigError(
+                f"生成文件未落盘：{destination}；Excel 实际路径：{actual}"
+            )
         logger.info(f"增值税计税表已生成：{destination}")
         return destination, written
     finally:

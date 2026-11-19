@@ -202,7 +202,9 @@ class VatFlow:
         output_dir = Path(self.get("输出目录") or self.config.get_path("output"))
         if not output_dir.is_absolute():
             output_dir = self.config.get_path("output") / output_dir
-        destination = output_dir / f"增值税计税表 {str(company).strip()} {period}.xlsx"
+        destination = (
+            output_dir / f"增值税计税表 {str(company).strip()} {period}.xlsx"
+        ).resolve()
         if destination.resolve() in (template.resolve(), Path(ledger_path).resolve()):
             raise ConfigError(f"输出文件不能与输入重合：{destination}")
 
