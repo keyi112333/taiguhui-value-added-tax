@@ -354,7 +354,7 @@ def build_workbook(template, destination, ledger_path, report_path, period_first
     """复制模板并完成明细账导入、上月留抵写入与会计期间更新。
 
     所有写入由 Excel COM 完成，保留模板中的公式、图表、数据验证与外部链接。
-    不在此处重算，后续核对模块会统一 CalculateFullRebuild。
+    保存前统一全量重算，确保缓存值与公式一致。
     """
     import pythoncom
     import win32com.client
@@ -414,6 +414,8 @@ def build_workbook(template, destination, ledger_path, report_path, period_first
         main = _require_sheet(book, main_sheet, "模板")
         _set_tax_period_text(main, period_first, month_end)
 
+        # 保存前重算，避免写入明细账/上月留抵后沿用模板旧缓存。
+        app.CalculateFullRebuild()
         book.Save()
         actual = Path(str(book.FullName))
         if actual.resolve() != destination.resolve():

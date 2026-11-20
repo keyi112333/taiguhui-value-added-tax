@@ -88,10 +88,10 @@ class VatFlow:
         return first
 
     def ledger_dates(self):
-        """明细账日期：会计期间当月及往前三个月，共四个月。"""
-        first, last = month_bounds(configured_period(self.get("会计期间")))
-        start = shift_month(first, -3)
-        return format_jde_date(start, "明细账起始日期"), format_jde_date(last, "会计期间结束日期")
+        """明细账日期：会计期间当月及往后三个月，共四个月。"""
+        first, _ = month_bounds(configured_period(self.get("会计期间")))
+        _, last = month_bounds(shift_month(first, 3))
+        return format_jde_date(first, "明细账起始日期"), format_jde_date(last, "明细账结束日期")
 
     def export_ledger(self):
         """模块二：从 JDE 导出明细账，返回下载文件路径。"""
