@@ -240,8 +240,45 @@ def _write_ledger(sheet, header_row, source_headers, rows, company_code):
     return len(aligned)
 
 
+def _find_report_header(sheet, max_rows=60):
+    """定位 R55GL1005 标题行：A 列为 Cat23 的那一行。"""
+    for row in range(1, max_rows + 1):
+        value = sheet.Cells(row, 1).Value
+        if isinstance(value, str) and value.strip().lower() == "cat23":
+            return row
+    raise ConfigError(f"{sheet.Name} 未找到 R55GL1005 标题行（Cat23）")
+
+
+def _last_report_row(sheet, header_row, last_row):
+    """从表尾向上跳过空行，返回最后一行的数据/汇总行号。"""
+    row = last_row
+    while row > header_row:
+        values = [sheet.Cells(row, column).Value for column in (1, 2, 5)]
+        if any(value is not None and str(value).strip() for value in values):
+            return row
+        row -= 1
+    return header_row
+
+
+def _fill_ending_balance(sheet, header_row, last_row):
+    """在 L 列填充 I 列减 J 列（期末借贷差额），汇总行除外。"""
+    data_last = _last_report_row(sheet, header_row, last_row)
+    label = sheet.Cells(data_last, 5).Value
+    if isinstance(label, str) and label.strip().lower().startswith("total"):
+        data_last -= 1
+    first = header_row + 1
+    if data_last < first:
+        return 0
+    formulas = tuple((f"=I{row}-J{row}",) for row in range(first, data_last + 1))
+    sheet.Range(
+        sheet.Cells(first, 12),
+        sheet.Cells(data_last, 12),
+    ).Formula = formulas
+    return len(formulas)
+
+
 def _copy_report(app, book, report_path, target_name):
-    """把 R55GL1005 报表整表写入“上月留抵”页。"""
+    """把 R55GL1005 报表整表写入“上月留抵”页，并在 L 列补 I-J 差额。"""
     report_path = Path(report_path)
     if not report_path.is_file():
         raise ConfigError(f"R55GL1005 报表不存在：{report_path}")
@@ -261,6 +298,12 @@ def _copy_report(app, book, report_path, target_name):
             f"R55GL1005 已写入 {target.Name}：{used.Address}"
             f"（{used.Rows.Count} 行 × {used.Columns.Count} 列）"
         )
+        # 报表只有 A-J 列，复制前的 ClearContents 会清掉 L 列公式，需重新填充。
+        header_row = _find_report_header(target)
+        rows = _fill_ending_balance(
+            target, header_row, used.Row + used.Rows.Count - 1
+        )
+        logger.info(f"L 列期末差额（I-J）已写入：{rows} 行")
     finally:
         report_book.Close(SaveChanges=False)
 
