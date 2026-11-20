@@ -140,8 +140,25 @@ def _target_headers(sheet, header_row, last_col):
     return [sheet.Cells(header_row, column).Value for column in range(1, last_col + 1)]
 
 
+def _clear_ledger_filter(sheet):
+    """去掉 JDE明细账 上的筛选，保留标题行并展开被隐藏的行。
+
+    模板若带着筛选保存，写入只会作用于可见区域，清除与写入都会错位，
+    新数据也可能被旧筛选条件隐藏，因此写入前先取消筛选。
+    """
+    if sheet.FilterMode:
+        sheet.ShowAllData()
+        logger.info(f"JDE明细账存在筛选结果，已全部显示：{sheet.Name}")
+    if sheet.AutoFilterMode:
+        sheet.AutoFilterMode = False
+        logger.info(f"JDE明细账已取消自动筛选（保留标题行）：{sheet.Name}")
+    # 取消筛选不会自动展开之前被筛选隐藏的行。
+    sheet.UsedRange.EntireRow.Hidden = False
+
+
 def _write_ledger(sheet, header_row, source_headers, rows, company_code):
     """按标题映射把明细账写入模板的 JDE明细账 页。"""
+    _clear_ledger_filter(sheet)
     used = sheet.UsedRange
     last_col = max(used.Column + used.Columns.Count - 1, len(source_headers))
     target_headers = _target_headers(sheet, header_row, last_col)
